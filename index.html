@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ساخت پروفایل آنتن</title>
+<style>
+:root{--bg:#0b1420;--card:#14212f;--line:#24384b;--cy:#22c7e0;--tx:#e6eef5;--mut:#7f95a8}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,Tahoma,sans-serif}
+body{margin:0;background:var(--bg);color:var(--tx);padding:18px 16px 50px}
+.wrap{max-width:620px;margin:0 auto}
+h1{font-size:20px;text-align:center;margin:6px 0 4px}
+.sub{text-align:center;color:var(--mut);font-size:12px;margin:0 0 22px}
+label{display:block;font-size:13px;color:var(--mut);margin:18px 0 8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.op{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px;cursor:pointer;font-size:13px}
+.op.on{border-color:var(--cy);background:#10303c}
+.op b{display:block;font-size:14px}
+.op span{color:var(--mut);font-size:11px;direction:ltr;display:block;margin-top:3px}
+.row{display:flex;gap:20px;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:8px;color:var(--tx);font-size:13px;margin:0}
+input[type=text]{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px;color:var(--tx);font-size:14px}
+.note{background:#101d29;border-right:3px solid var(--cy);border-radius:8px;padding:11px 12px;font-size:12px;color:#9fb4c4;margin:18px 0;line-height:1.8}
+button{width:100%;padding:15px;border:0;border-radius:12px;background:var(--cy);color:#04202a;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px}
+.ghost{background:transparent;border:1.5px solid var(--line);color:var(--mut);font-weight:500;font-size:13px;padding:11px}
+textarea{margin-top:12px;width:100%;height:240px;background:#0d1925;border:1.5px solid var(--line);border-radius:10px;color:#8fe3f2;font-family:ui-monospace,monospace;font-size:11px;padding:10px;direction:ltr}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>ساخت پروفایل آنتن</h1>
+<p class="sub">هر بار ساخت، یک UUID تازه تولید میشود</p>
+
+<label>اپراتور سیم‌کارت</label>
+<div class="grid" id="ops"></div>
+
+<div id="customBox" class="hidden">
+<label>APN دلخواه</label>
+<input type="text" id="customApn" dir="ltr" placeholder="mcinet">
+</div>
+
+<label>تنظیمات</label>
+<div class="row">
+<label class="chk"><input type="checkbox" id="xlat" checked> XLAT464</label>
+<label class="chk"><input type="checkbox" id="roam" checked> Domestic Roaming</label>
+</div>
+
+<div class="note" id="note">پروفایل را فقط روی یک گوشی نصب کن. قبل از نصب پروفایل جدید، قبلی را حذف کن.</div>
+
+<button id="gen">ساخت و دانلود پروفایل</button>
+<button id="show" class="ghost">فقط متن پروفایل را نشان بده</button>
+<textarea id="out" class="hidden" readonly></textarea>
+</div>
+
+<script>
+var OPS = {
+  mci:      {t:'همراه اول', s:'MCI', apn:'mcinet', xlat:true},
+  irancell: {t:'ایرانسل', s:'Irancell', apn:'mtnirancell', xlat:true},
+  rightel:  {t:'رایتل', s:'Rightel', apn:'RighTel', xlat:false},
+  aptel:    {t:'آپتل', s:'ApTel', apn:'aptel', xlat:true},
+  samantel: {t:'سامانتل', s:'Samantel', apn:'samantel', xlat:true},
+  shatel:   {t:'شاتل موبایل', s:'Shatel', apn:'shatelmobile', xlat:true},
+  all:      {t:'هر دو اصلی', s:'MCI + Irancell', apn:'mcinet', xlat:true},
+  custom:   {t:'APN دلخواه', s:'Custom', apn:'', xlat:true}
+};
+var cur = 'mci';
+
+var box = document.getElementById('ops');
+Object.keys(OPS).forEach(function(k){
+  var v = OPS[k];
+  var d = document.createElement('div');
+  d.className = 'op' + (k === 'mci' ? ' on' : '');
+  d.innerHTML = '<b>' + v.t + '</b><span>' + v.s + '</span>';
+  d.onclick = function(){
+    cur = k;
+    var all = document.querySelectorAll('.op');
+    for (var i = 0; i < all.length; i++) all[i].classList.remove('on');
+    d.classList.add('on');
+    document.getElementById('customBox').classList.toggle('hidden', k !== 'custom');
+  };
+  box.appendChild(d);
+});
+
+function U(){ return crypto.randomUUID().toUpperCase(); }
+
+function apnDict(name, auth, xlat, roam){
+  var r = roam ? 1 : 0;
+  return '<dict>'
+  + '<key>AllowedProtocolMask</key><integer>1</integer>'
+  + '<key>AllowedProtocolMaskInDomesticRoaming</key><integer>' + r + '</integer>'
+  + '<key>AllowedProtocolMaskInRoaming</key><integer>' + r + '</integer>'
+  + '<key>AuthenticationType</key><string>' + auth + '</string>'
+  + '<key>DefaultProtocolMask</key><integer>1</integer>'
+  + '<key>EnableXLAT464</key><' + (xlat ? 'true' : 'false') + '/>'
+  + '<key>Name</key><string>' + name + '</string>'
+  + '</dict>';
+}
+
+function build(){
+  var op = OPS[cur];
+  var apn = cur === 'custom' ? (document.getElementById('customApn').value.trim() || 'mcinet') : op.apn;
+  var xlat = document.getElementById('xlat').checked && op.xlat !== false;
+  var roam = document.getElementById('roam').checked;
+  var pid = U();
+  var apns;
+
+  if (cur === 'all') {
+    apns = [apnDict('mcinet','CHAP',xlat,roam), apnDict('mtnirancell','PAP',xlat,roam)];
+  } else if (cur === 'rightel') {
+    apns = [apnDict(apn,'PAP',false,roam)];
+  } else {
+    apns = [apnDict(apn,'CHAP',xlat,roam), apnDict(apn,'PAP',xlat,roam)];
+  }
+
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+  + '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+  + '<plist version="1.0"><dict>\n'
+  + '<key>ConsentText</key><dict><key>default</key><string>برگشت آنتن</string></dict>\n'
+  + '<key>PayloadContent</key><array><dict>\n'
+  + '<key>APNs</key><array>\n' + apns.join('\n') + '\n</array>\n'
+  + '<key>PayloadDisplayName</key><string>Cellular</string>\n'
+  + '<key>PayloadIdentifier</key><string>com.apple.cellular.' + pid + '</string>\n'
+  + '<key>PayloadType</key><string>com.apple.cellular</string>\n'
+  + '<key>PayloadUUID</key><string>' + U() + '</string>\n'
+  + '<key>PayloadVersion</key><integer>1</integer>\n'
+  + '</dict></array>\n'
+  + '<key>PayloadDisplayName</key><string>Anten</string>\n'
+  + '<key>PayloadIdentifier</key><string>local.anten.' + pid + '</string>\n'
+  + '<key>PayloadRemovalDisallowed</key><false/>\n'
+  + '<key>PayloadType</key><string>Configuration</string>\n'
+  + '<key>PayloadUUID</key><string>' + U() + '</string>\n'
+  + '<key>PayloadVersion</key><integer>1</integer>\n'
+  + '</dict></plist>';
+}
+
+document.getElementById('gen').onclick = function(){
+  var txt = build();
+  document.getElementById('note').textContent = 'ساخته شد. فقط روی یک گوشی نصب کن.';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], {type:'application/x-apple-aspen-config'}));
+  a.download = 'anten-' + cur + '.mobileconfig';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  var o = document.getElementById('out');
+  o.value = txt;
+  o.classList.remove('hidden');
+};
+
+document.getElementById('show').onclick = function(){
+  var o = document.getElementById('out');
+  o.value = build();
+  o.classList.toggle('hidden');
+};
+</script>
+</body>
+</html>
